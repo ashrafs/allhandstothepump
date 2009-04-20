@@ -23,15 +23,16 @@ IMPLEMENT_DYNCREATE(CWifiLocDoc, CDocument)
 BEGIN_MESSAGE_MAP(CWifiLocDoc, CDocument)
 END_MESSAGE_MAP()
 
+#define M_PI       3.14159265358979323846
 
 double GetErrorFromTrust( double trust )
 {
-	return (100 - trust * 100)/2;
+	return  sqrt( 4.0 / (M_PI*trust) ); 
 }
 
 double GetTrustFromError( double error )
 {
-	return (100 - error * 2 ) / 100;
+	return ( 4.0 / ( M_PI * error * error ) );//  (100 - error * 2 ) / 100;
 }
 // CWifiLocDoc construction/destruction
 
@@ -428,16 +429,16 @@ int CWifiLocDoc::Localization(CPoint &result,int &score)
 		for( int j = box.left ; j <= box.right ; ++j )
 		{
 			int count;
-			int score = GetRssiSimilarity(m_CurRssi,m_GlobalDB[i][j] , &count);
+			int sc = GetRssiSimilarity(m_CurRssi,m_GlobalDB[i][j] , &count);
 			double trust = m_GlobalDB[i][j].trust;
 			if( count )
-				score /= count;
-			if( highscore < 0 || score < highscore && trust * 100 >= TRUST_THRESHOLD )
-			//if( highscore < 0 || score < highscore - SIMILAR_THRESHOLD || score >= highscore-SIMILAR_THRESHOLD && score <= highscore+SIMILAR_THRESHOLD && trust > hightrust )
+				sc /= count;
+			if( highscore < 0 || sc < highscore )//&& trust * 100 >= TRUST_THRESHOLD )
+			//if( highscore < 0 || sc < highscore - SIMILAR_THRESHOLD || sc >= highscore-SIMILAR_THRESHOLD && sc <= highscore+SIMILAR_THRESHOLD && trust > hightrust )
 			{
 				result.x = j;
 				result.y = i;
-				highscore = score;
+				highscore = sc;
 				hightrust = trust;
 			}
 		}
@@ -598,7 +599,7 @@ void CWifiLocDoc::DownloadData()
 		}
 	}*/
 	CFile f;
-	if( f.Open( _T("d:\\globalFingerprint") , CFile::modeRead , 0 ) || f.Open( _T("f:\\globalFingerprint") , CFile::modeRead , 0 ) )
+	if( f.Open( _T("d:\\wifiloc\\globalFingerprint") , CFile::modeRead , 0 ) || f.Open( _T("f:\\globalFingerprint") , CFile::modeRead , 0 ) )
 	{
 		int pathnum;
 		f.Read(&pathnum , sizeof(int) );
@@ -679,7 +680,7 @@ void CWifiLocDoc::UploadData( int type )
 			for( int j = 0 ; j < GRID_W ; ++j )
 			{
 				if( m_RssiDB[i][j].apnum == 0 )continue;
-				if( m_RssiDB[i][j].trust >= m_GlobalDB[i][j].trust )
+				if( m_GlobalDB[i][j].apnum == 0 || m_RssiDB[i][j].trust >= m_GlobalDB[i][j].trust )
 				{
 					m_GlobalDB[i][j] = m_RssiDB[i][j];
 				}
@@ -724,8 +725,8 @@ void CWifiLocDoc::UploadData( int type )
 
 	BackupData();
 	CFile f;
-	if( !f.Open( _T("d:\\globalFingerprint") , CFile::modeWrite|CFile::modeCreate , 0 ) )
-		f.Open( _T("f:\\globalFingerprint") , CFile::modeWrite|CFile::modeCreate , 0 );
+	if( !f.Open( _T("d:\\wifiloc\\globalFingerprint") , CFile::modeWrite|CFile::modeCreate , 0 ) )
+		f.Open( _T("f:\\wifiloc\\globalFingerprint") , CFile::modeWrite|CFile::modeCreate , 0 );
 	int pathnum = 0;
 	f.Write(&pathnum , sizeof(int) );
 	for( int i = 0 ; i < GRID_H ; ++i )
@@ -745,15 +746,15 @@ void CWifiLocDoc::BackupData()
 	SYSTEMTIME time;
 	::GetLocalTime( &time );
 	
-	if( !source.Open( _T("d:\\globalDB") , CFile::modeRead , 0 ) )
+	if( !source.Open( _T("d:\\wifiloc\\globalDB") , CFile::modeRead , 0 ) )
 	{
-		if( !source.Open( _T("f:\\globalDB") , CFile::modeRead , 0 ) )
+		if( !source.Open( _T("f:\\wifiloc\\globalDB") , CFile::modeRead , 0 ) )
 			return;
 	}
-	wsprintf(filename,_T("d:\\globalDB_%02d%02d%02d%02d%02d") , time.wMonth , time.wDay,time.wHour,time.wMinute , time.wSecond );
+	wsprintf(filename,_T("d:\\wifiloc\\globalDB_%02d%02d%02d%02d%02d") , time.wMonth , time.wDay,time.wHour,time.wMinute , time.wSecond );
 	if( !dest.Open( filename , CFile::modeWrite|CFile::modeCreate , 0 ) )
 	{
-		wsprintf(filename,_T("f\\globalDB_%02d%02d%02d%02d%02d") , time.wMonth , time.wDay,time.wHour,time.wMinute , time.wSecond );
+		wsprintf(filename,_T("f\\wifiloc\\globalDB_%02d%02d%02d%02d%02d") , time.wMonth , time.wDay,time.wHour,time.wMinute , time.wSecond );
 		dest.Open( filename , CFile::modeWrite|CFile::modeCreate , 0 );
 	}
 	int size = source.GetLength();

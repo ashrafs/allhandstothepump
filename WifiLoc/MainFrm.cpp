@@ -442,20 +442,22 @@ BOOL CMainFrame::OnCopyData(CWnd* pWnd, COPYDATASTRUCT* pCopyDataStruct)
 
 			int score;
 			CPoint loc;
-			if( pDoc->Localization(loc , score) == 0 )
+			/*if( pDoc->Localization(loc , score) == 0 )
 			{
 				RSSIINFO *revised = &pDoc->m_GlobalDB[ loc.y ][ loc.x ];
+				double err1 = GetErrorFromTrust( data.trust );
+				double err2 = GetErrorFromTrust( revised->trust ) + FINGERPRINT_ERROR;
 				if( m_nLocCount )
 					m_nLocCount--;
-				if( !m_nLocCount && data.trust <= 0.80 && revised->trust - 0.1 > data.trust )//&& score <  )
+				if( !m_nLocCount && err1 >= 10 && err2 < err1 && score < 5 )
 				{
 					data.x = loc.x;
 					data.y = loc.y;
-					data.trust = revised->trust - 0.1;
+					data.trust = GetTrustFromError( err2 );
 					IPC_SendWifiData( data.x , data.y , data.trust );
 					m_nLocCount = 5;
 				}
-			}
+			}*/
 			PATH *next = new PATH;
 			next->start = pDoc->m_CurPos;
 			next->end.x = data.x;
