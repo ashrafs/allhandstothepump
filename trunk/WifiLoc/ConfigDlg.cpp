@@ -323,7 +323,7 @@ void CConfigDlg::OnBnClickedButtonErrDataSave()
 	SYSTEMTIME s;
 	GetLocalTime(&s);
 	char fn[100];
-	sprintf( fn , "d:\\loc_err_%02d%02d%02d%02d%02d.txt" , s.wMonth , s.wDay , s.wHour , s.wMinute , s.wSecond );
+	sprintf( fn , "d:\\wifiloc\\loc_err_%02d%02d%02d%02d%02d.txt" , s.wMonth , s.wDay , s.wHour , s.wMinute , s.wSecond );
 	FILE *fp = fopen( fn , "wt" );
 
 	char text[100];
