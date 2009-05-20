@@ -43,4 +43,8 @@ public:
 	afx_msg void OnBnClickedButtonResult();
 public:
 	afx_msg void OnCbnSelchangeComboSort();
+public:
+	afx_msg void OnCbnSelchangeComboGrid();
+public:
+	afx_msg void OnCbnSelchangeComboResult();
 };

@@ -32,9 +32,10 @@ public:
 	virtual void AssertValid() const;
 	virtual void Dump(CDumpContext& dc) const;
 #endif
-
-protected:  // control bar embedded members
+public:
 	CStatusBar  m_wndStatusBar;
+protected:  // control bar embedded members
+	
 	CToolBar    m_wndToolBar;
 public:
 	CConfigDlg m_wndConfigDlg;

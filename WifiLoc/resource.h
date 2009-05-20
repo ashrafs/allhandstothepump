@@ -24,6 +24,8 @@
 #define IDC_COMBO_UPLOAD                1014
 #define IDC_COMBO_STATE2                1015
 #define IDC_COMBO_SORT                  1015
+#define IDC_COMBO_SCANDELAY2            1016
+#define IDC_COMBO_GRID                  1016
 
 // Next default values for new objects
 // 

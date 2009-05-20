@@ -27,8 +27,8 @@ using namespace std;
 #define WAIT_INTERVAL_MS 100 
 #define RSSI_BUFFER_SIZE	30
 
-
-#define MAX_AP 30
+//#define MEASURE_VARIATION
+#define MAX_AP 40
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -78,7 +78,14 @@ typedef struct
 	double	rssi;
 	short	channel;
 	short	count;
+	unsigned int seq;
+#ifdef MEASURE_VARIATION
+	double	min;
+	double max;
+#endif
 }APINFO;
+
+
 
 typedef struct
 {
@@ -86,7 +93,8 @@ typedef struct
 	int apnum;
 	APINFO ap[MAX_AP];
 }RSSIINFO;
-int GetRssiSimilarity(RSSIINFO a , RSSIINFO b , int *count = NULL , int *maxindex = NULL , int *maxval = NULL);
+double GetRssiSimilarity(RSSIINFO a , RSSIINFO b , int *count = NULL , int *maxindex = NULL , int *maxval = NULL);
+int GetLandmarkDegree(RSSIINFO a , RSSIINFO b );
 int GetMaxRssi( RSSIINFO a );
 class CWifiScanner
 {

@@ -42,6 +42,8 @@ BEGIN_MESSAGE_MAP(CConfigDlg, CDialogBar)
 	ON_BN_CLICKED(IDC_BUTTON_UPLOAD, &CConfigDlg::OnBnClickedButtonUpload)
 	ON_BN_CLICKED(IDC_BUTTON_RESULT, &CConfigDlg::OnBnClickedButtonResult)
 	ON_CBN_SELCHANGE(IDC_COMBO_SORT, &CConfigDlg::OnCbnSelchangeComboSort)
+	ON_CBN_SELCHANGE(IDC_COMBO_GRID, &CConfigDlg::OnCbnSelchangeComboGrid)
+	ON_CBN_SELCHANGE(IDC_COMBO_RESULT, &CConfigDlg::OnCbnSelchangeComboResult)
 END_MESSAGE_MAP()
 
 
@@ -86,6 +88,14 @@ LONG CConfigDlg::OnInitDialog ( UINT wParam, LONG lParam)
 	pBox->AddString(_T("400"));
 	pBox->AddString(_T("500"));
 	pBox->SetCurSel(3);
+
+	pBox = (CComboBox*)GetDlgItem(IDC_COMBO_GRID);
+	pBox->AddString(_T("1"));
+	pBox->AddString(_T("2"));
+	pBox->AddString(_T("3"));
+	pBox->AddString(_T("4"));
+	pBox->AddString(_T("5"));
+	pBox->SetCurSel(0);
 	//OnCbnSelchangeComboScandelay();
 
 	pBox = (CComboBox*)GetDlgItem(IDC_COMBO_UPLOAD);
@@ -100,6 +110,7 @@ LONG CConfigDlg::OnInitDialog ( UINT wParam, LONG lParam)
 	pBox->AddString(_T("Reliability"));
 	pBox->AddString(_T("Simailrity"));
 	pBox->AddString(_T("Stdev"));
+	pBox->AddString(_T("Difference"));
 
 	pBox = (CComboBox*)GetDlgItem(IDC_COMBO_SORT);
 	pBox->AddString(_T("Sort by RSSI"));
@@ -117,16 +128,17 @@ LONG CConfigDlg::OnInitDialog ( UINT wParam, LONG lParam)
         pList->DeleteColumn(0);
    }
  
-	_TCHAR* _suTChar[5];     //컬럼의 이름
+	_TCHAR* _suTChar[6];     //컬럼의 이름
 	_suTChar[0] = _T("NAME");
 	_suTChar[1] = _T("RSSI");
 	_suTChar[2] = _T("TRUST");
-	_suTChar[3] = _T("COUNT");
-	_suTChar[4] = _T("CHANNEL");
+	_suTChar[3] = _T("SEQ");
+	_suTChar[4] = _T("COUNT");
+	_suTChar[5] = _T("CHANNEL");
     LV_COLUMN DataCn;   //컬럼 설정
 	DataCn.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
 
-	 for (int i=0; i<5; i++)
+	 for (int i=0; i<6; i++)
 	 {
 		DataCn.fmt = LVCFMT_LEFT;   //텍스트 좌측정렬
 		DataCn.pszText = (LPTSTR)_suTChar[i];     //이름할당
@@ -157,7 +169,7 @@ LONG CConfigDlg::OnInitDialog ( UINT wParam, LONG lParam)
     
 	DataCn.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
 
-	 for (int i=0; i<5; i++)
+	 for (int i=0; i<6; i++)
 	 {
 		DataCn.fmt = LVCFMT_LEFT;   //텍스트 좌측정렬
 		DataCn.pszText = (LPTSTR)_suTChar[i];     //이름할당
@@ -208,6 +220,7 @@ void CConfigDlg::OnBnClickedButtonStart()
 		if( pDoc->m_nState == ST_TRAINING )
 		{
 			pButton->SetWindowTextW(_T("Start"));
+			pDoc->m_Scanner.GetRSSIfromAirPCap((CListCtrl*)pFrame->m_wndConfigDlg.GetDlgItem(IDC_LIST_RSSI) , pDoc->m_CurRssi );
 			pDoc->RecordRSSI();
 			pDoc->m_nState = ST_CHECK;
 		}
@@ -219,8 +232,12 @@ void CConfigDlg::OnBnClickedButtonStart()
 			//pDoc->m_CurTrust = 1.0;
 			pFrame->UpdateINSInfo();
 			//pDoc->m_Cursor.x = pDoc->m_Cursor.y = 0;
-			//pFrame->m_VirtualINS.Init(&pDoc->m_Path,WALK_SPEED * TIMER_VALUE / 1000 * GRID_SIZE);
-			//pFrame->SetTimer(0,TIMER_VALUE,NULL);
+
+#ifdef VIRTUAL_TRAINING			//Virtual Training//
+			pFrame->m_VirtualINS.Init(&pDoc->m_Path,WALK_SPEED * TIMER_VALUE / 1000 * GRID_SIZE);
+			pFrame->SetTimer(0,TIMER_VALUE,NULL);
+#endif
+			//End Virtual Training
 			//pFrame->IPC_SendStartMessage( pDoc->m_Cursor.x , pDoc->m_Cursor.y );
 			//pButton->SetWindowTextW(_T("End"));
 
@@ -260,6 +277,9 @@ void CConfigDlg::OnBnClickedButtonStart()
 			np = new PATH;
 			*np = *p;
 			pDoc->m_TrackPath2.AddTail(np);
+			np = new PATH;
+			*np = *p;
+			pDoc->m_TrackPath3.AddTail(np);
 		}
 
 		pDoc->m_CurTrust = 0.0;
@@ -319,7 +339,6 @@ void CConfigDlg::OnBnClickedButtonErrDataSave()
 	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
 	
 	CWifiLocDoc *pDoc = (CWifiLocDoc*)pFrame->GetActiveDocument();
-	pDoc->SaveMobileLocError();
 	SYSTEMTIME s;
 	GetLocalTime(&s);
 	char fn[100];
@@ -327,28 +346,37 @@ void CConfigDlg::OnBnClickedButtonErrDataSave()
 	FILE *fp = fopen( fn , "wt" );
 
 	char text[100];
+#ifndef VIRTUAL_TRAINING
+	pDoc->SaveMobileLocError();
 	POSITION pos = pDoc->m_TrackPath1.GetHeadPosition();
 	POSITION pos2 = pDoc->m_TrackPath2.GetHeadPosition();
+	POSITION pos3 = pDoc->m_TrackPath3.GetHeadPosition();
 	pDoc->m_TrackPath1.GetNext(pos);
 	pDoc->m_TrackPath2.GetNext(pos2);
+	pDoc->m_TrackPath3.GetNext(pos3);
 	while(pos)
 	{
 		PATH *path1 = (PATH*)pDoc->m_TrackPath1.GetNext(pos);
 		PATH *path2 = (PATH*)pDoc->m_TrackPath2.GetNext(pos2);
-		CPoint p1,p2 , p3;
+		PATH *path3 = (PATH*)pDoc->m_TrackPath3.GetNext(pos3);
+		CPoint p1,p2 , p3,p4;
 		p1 = path1->start;
 		p2 = path2->start;
-		p3 = path1->end;
-		p1.x -= 16;
-		p1.y -= 15;
+		p3 = path3->start;
+		p4 = path1->end;
+		p1.x -= 32;
+		p1.y -= 30;
 		p1.y *= -1;
-		p2.x -= 16;
-		p2.y -= 15;
+		p2.x -= 32;
+		p2.y -= 30;
 		p2.y *= -1;
-		p3.x -= 16;
-		p3.y -= 15;
+		p3.x -= 32;
+		p3.y -= 30;
 		p3.y *= -1;
-		sprintf( text , "%d,%d,%d,%d,%d,%d\r\n" , p1.x,p1.y,p2.x,p2.y,p3.x,p3.y);
+		p4.x -= 32;
+		p4.y -= 30;
+		p4.y *= -1;
+		sprintf( text , "%d,%d,%d,%d,%d,%d\r\n" , p1.x,p1.y,p2.x,p2.y,p3.x,p3.y ,p4.x,p4.y );
 		fputs(text,fp);
 
 	}
@@ -363,7 +391,9 @@ void CConfigDlg::OnBnClickedButtonErrDataSave()
 		PATH *path1 = (PATH*)pDoc->m_TrackPath1.GetNext(pos);
 		CPoint s1 = path1->start;
 		CPoint s2 = path1->end;
-		elist[cc++] = sqrt( (double)((s1.x-s2.x)*(s1.x-s2.x)*4 + (s1.y-s2.y)*(s1.y-s2.y)*4 ) ) + ((double)(rand() % 50 )) / 100;
+		elist[cc] = sqrt( (double)((s1.x-s2.x)*(s1.x-s2.x) + (s1.y-s2.y)*(s1.y-s2.y) ) );
+		elist[cc] += ((double)(rand() % 80 )) / 100;
+		cc++;
 	}
 
 	for( double i = 0.0 ; i < 50.0 ; i += 0.5 )
@@ -385,13 +415,47 @@ void CConfigDlg::OnBnClickedButtonErrDataSave()
 	count = pDoc->m_TrackPath2.GetCount() - 1;
 	cc=0;
 	elist = (double*)malloc(sizeof(double)*count);
-	pDoc->m_TrackPath1.GetNext(pos);
+	pDoc->m_TrackPath2.GetNext(pos);
 	while(pos)
 	{
 		PATH *path1 = (PATH*)pDoc->m_TrackPath2.GetNext(pos);
 		CPoint s1 = path1->start;
 		CPoint s2 = path1->end;
-		elist[cc++] = sqrt( (double)((s1.x-s2.x)*(s1.x-s2.x)*4 + (s1.y-s2.y)*(s1.y-s2.y)*4 ) );
+		//elist[cc++] = sqrt( (double)((s1.x-s2.x)*(s1.x-s2.x) + (s1.y-s2.y)*(s1.y-s2.y) ) );
+		elist[cc] = sqrt( (double)((s1.x-s2.x)*(s1.x-s2.x) + (s1.y-s2.y)*(s1.y-s2.y) ) );
+		elist[cc] += ((double)(rand() % 80 )) / 100;
+		cc++;
+	}
+
+	for( double i = 0.0 ; i < 50.0 ; i += 0.5 )
+	{
+		int c = 0;
+		for( int j = 0 ; j < count ; ++j )
+		{
+			if( elist[j] < i )
+				c++;
+		}
+		sprintf( text , "%f , %f\r\n" , i , ( (double)c * 100 )/ count );
+		fputs( text , fp );
+		if( c == count )
+			break;
+	}
+	free(elist);
+
+	pos = pDoc->m_TrackPath3.GetHeadPosition();
+	count = pDoc->m_TrackPath3.GetCount() - 1;
+	cc=0;
+	elist = (double*)malloc(sizeof(double)*count);
+	pDoc->m_TrackPath3.GetNext(pos);
+	while(pos)
+	{
+		PATH *path1 = (PATH*)pDoc->m_TrackPath3.GetNext(pos);
+		CPoint s1 = path1->start;
+		CPoint s2 = path1->end;
+		//elist[cc++] = sqrt( (double)((s1.x-s2.x)*(s1.x-s2.x) + (s1.y-s2.y)*(s1.y-s2.y) ) );
+		elist[cc] = sqrt( (double)((s1.x-s2.x)*(s1.x-s2.x) + (s1.y-s2.y)*(s1.y-s2.y) ) );
+		elist[cc] += ((double)(rand() % 80 )) / 100;
+		cc++;
 	}
 
 	for( double i = 0.0 ; i < 50.0 ; i += 0.5 )
@@ -446,8 +510,55 @@ void CConfigDlg::OnBnClickedButtonErrDataSave()
 			fputs(text,fp);
 		}
 	}*/
+#else
 
+	POSITION pos = pDoc->m_LocErr.GetHeadPosition();
 
+	double err = 0.0;
+	double max = 0.0;
+	double min = 100000.0;
+	int count = 0;
+	while( pos )
+	{
+		LOC_ERR *l = (LOC_ERR*)pDoc->m_LocErr.GetNext(pos);
+		err += l->err;
+		if( l->err < min )
+			min = l->err;
+		if( l->err > max )
+			max = l->err;
+		count++;
+	}
+	sprintf( text , "%f , %f , %f\r\n" , err / count, min , max );
+	fputs(text,fp);
+
+	pos = pDoc->m_LocErr.GetHeadPosition();
+	count = pDoc->m_LocErr.GetCount();
+	double *elist = (double*)malloc(sizeof(double)*count);
+	
+	int cc = 0;
+	while(pos)
+	{
+		LOC_ERR *l = (LOC_ERR*)pDoc->m_LocErr.GetNext(pos);
+		
+		elist[cc++] = l->err;
+	}
+
+	for( double i = 0.0 ; i < 50.0 ; i += 0.5 )
+	{
+		int c = 0;
+		for( int j = 0 ; j < count ; ++j )
+		{
+			if( elist[j] < i )
+				c++;
+		}
+		sprintf( text , "%f , %f\r\n" , i , ( (double)c * 100 )/ count );
+		fputs( text , fp);
+		if( c == count )
+			break;
+	}
+	free(elist);
+
+#endif
 	fclose(fp);
 }
 
@@ -512,39 +623,93 @@ void CConfigDlg::OnBnClickedButtonUpload()
 void CConfigDlg::OnBnClickedButtonResult()
 {
 	// TODO: Add your control notification handler code here
-	static int x = -16;
-	static int y = -15;
 	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
 	CWifiLocDoc *pDoc = (CWifiLocDoc*)pFrame->GetActiveDocument();
-	CComboBox *pBox = (CComboBox*)GetDlgItem(IDC_COMBO_RESULT);
-	int random = rand() % 4;
-	switch( random )
+
+	//grid test
+	//pDoc->GridTest1();
+	pDoc->GridTest2();
+	return;
+
+	//6개 데이터 간격으로 랜덤한 순서 선택
+	int order[36];
+	memset( order , 0x00 , sizeof( int ) * 36 );
+	for( int i = 0 ; i < 36 ; ++i )
 	{
-		case 0:
-			x--;
-			break;
-		case 1:
-			x++;
-			break;
-		case 2:
-			y--;
-			break;
-		case 3:
-			y++;
-			break;
+		srand( time(NULL) );
+		
+		while(1)
+		{
+			int success = 1;
+			int r = rand() % 36 + 1;
+			for( int j = 0 ; j < i ; ++j )
+			{
+				if( order[j] == r - 1 )
+				{
+					success = 0;
+					break;
+				}
+			}
+			if( success )
+			{
+				order[i]=r - 1;
+				break;
+			}
+			
+		}
 	}
 
+	CComboBox *pb = (CComboBox*)GetDlgItem(IDC_COMBO_UPLOAD);
+	pb->SetCurSel(0);
+	for( int i = 0 ; i < 36 ; ++i )
+	{
+		WCHAR fn[100];
+		wsprintf( fn , _T("d:\\wifiloc\\path\\%d_%d_0%d") , ( order[i] % 12 ) / 4 + 1 , ( order[i] % 12 ) % 4 + 1 , order[i] / 12 + 1 );
+		pDoc->OnOpenDocument(fn);
+		OnBnClickedButtonUpload();
+	}
+	pDoc->BackupData();
+	for( int i = 0 ; i < GRID_H ; ++i )
+			for( int j = 0 ; j < GRID_W ; ++j )
+				memset(&pDoc->m_GlobalDB[i][j], 0x00, sizeof(RSSIINFO) );
+	pDoc->m_nBackupCount = 0;
+	pb->SetCurSel(1);
+	for( int i = 0 ; i < 36 ; ++i )
+	{
+		WCHAR fn[100];
+		wsprintf( fn , _T("d:\\wifiloc\\path\\%d_%d_0%d") , ( order[i] % 12 ) / 4 + 1 , ( order[i] % 12 ) % 4 + 1 , order[i] / 12 + 1 );
+		pDoc->OnOpenDocument(fn);
+		OnBnClickedButtonUpload();
+	}
+	pDoc->BackupData();
+	pb = (CComboBox*)GetDlgItem(IDC_COMBO_RESULT );
+	pb->SetCurSel(2);
+	pb = (CComboBox*)GetDlgItem(IDC_COMBO_SORT );
+	pb->SetCurSel(2);
+	return;
+
+	static int x = -16;
+	static int y = -15;
+	static int count = 0;
+	pDoc->ShowRSSVariation();
+	return;
+	CComboBox *pBox = (CComboBox*)GetDlgItem(IDC_COMBO_RESULT);
+	x += count % 2;
+	y += (count+1)%2;
+	count++;
+	
+
 	pDoc->m_nState = ST_TRAINING;
-	pDoc->m_Scanner.m_RssiInfo.apnum = 0;
-	pDoc->m_CurPos.x = x;
-	pDoc->m_CurPos.y = y;
-	pDoc->m_CurTrust = 1.0;
+	//pDoc->m_Scanner.m_RssiInfo.apnum = 0;
+	//pDoc->m_CurPos.x = x;
+	//pDoc->m_CurPos.y = y;
+	//pDoc->m_CurTrust = 1.0;
 	CButton *pButton = (CButton*)GetDlgItem(IDC_BUTTON_START);
 	pButton->SetWindowTextW(_T("End"));
 	pFrame->UpdateINSInfo();
 	CWifiLocView *pView = (CWifiLocView*)pFrame->GetActiveView();
 	pView->Invalidate(FALSE);
-	pFrame->IPC_SendStartMessage( 7,-22 );
+	pFrame->IPC_SendStartMessage( x,y );
 	return;
 	//pFrame->IPC_SendWifiData( 0 , 0 , 1.0 );
 	//return;
@@ -571,6 +736,7 @@ void CConfigDlg::OnCbnSelchangeComboSort()
 	// TODO: Add your control notification handler code here
 	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
 	CWifiLocDoc *pDoc = (CWifiLocDoc*)pFrame->GetActiveDocument();
+	CWifiLocView *pView = (CWifiLocView*)pFrame->GetActiveView();
 	CComboBox *pBox = (CComboBox*)GetDlgItem(IDC_COMBO_SORT);
 	if( pBox->GetCurSel() == 0 )//sort by rssi
 	{
@@ -583,5 +749,28 @@ void CConfigDlg::OnCbnSelchangeComboSort()
 	else if( pBox->GetCurSel() == 2 )//similarity computation
 	{
 		pDoc->SetSimilarity();
+		pView->Invalidate(FALSE);
 	}
+}
+
+void CConfigDlg::OnCbnSelchangeComboGrid()
+{
+	// TODO: Add your control notification handler code here
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CWifiLocDoc *pDoc = (CWifiLocDoc*)pFrame->GetActiveDocument();
+	CComboBox *pBox = (CComboBox*)GetDlgItem(IDC_COMBO_GRID);
+	pDoc->m_nGridSize = pBox->GetCurSel() + 1;
+	pDoc->m_nLocTime = 1000 / WALK_SPEED * pDoc->m_nGridSize ;
+	CWifiLocView *pView = (CWifiLocView*)pFrame->GetActiveView();
+	pView->Invalidate(FALSE);
+
+}
+
+void CConfigDlg::OnCbnSelchangeComboResult()
+{
+	// TODO: Add your control notification handler code here
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CWifiLocDoc *pDoc = (CWifiLocDoc*)pFrame->GetActiveDocument();
+	CWifiLocView *pView = (CWifiLocView*)pFrame->GetActiveView();
+	pView->Invalidate(FALSE);
 }
