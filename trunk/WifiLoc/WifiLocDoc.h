@@ -14,19 +14,20 @@
 #define ST_READY		6
 
 
-#define GRID_SIZE	20
-#define GRID_W	50
-#define GRID_H	50
+#define GRID_SIZE	10
+#define GRID_W	72
+#define GRID_H	72
 
+#define VIRTUAL_TRAINING
 
 #define TIMER_LOCALIZATION	3000
 #define TIMER_GROUNDTRUTH	10000
 #define TIMER_STDEV			50000
 
-#define SIMILAR_THRESHOLD	4
+#define SIMILAR_THRESHOLD	6.0
 
-#define WALK_SPEED	0.65
-#define TIMER_VALUE	100
+#define WALK_SPEED	1.3
+#define TIMER_VALUE	500
 
 #define INTEGRATION_OVERWRITE	0
 #define	INTEGRATION_MERGE		1
@@ -36,7 +37,8 @@
 
 #define INTEGRATION_THRESHOLD	50.0
 
-#define TRUST_THRESHOLD	70
+#define TRUST_THRESHOLD	10
+#define ERROR_THRESHOLD	10
 
 #define GROUNDTRUTH_SAMPLESIZE	10
 typedef struct
@@ -47,8 +49,8 @@ typedef struct
 
 typedef struct
 {
-	int sx,sy;
-	int rx,ry;
+	double sx,sy;
+	double rx,ry;
 	double err;
 	RSSIINFO cur,source,result;
 }LOC_ERR;
@@ -78,10 +80,14 @@ public:
 	
 	CWifiScanner m_Scanner;
 	int	m_nState;
+	int m_nGridSize;
+	int m_nBackupCount;
 	CPtrList m_Path;
 	CPtrList m_TrackPath1;
 	CPtrList m_TrackPath2;
+	CPtrList m_TrackPath3;
 	RSSIINFO m_RssiDB[GRID_H][GRID_W];
+	RSSIINFO m_CompareDB[GRID_H][GRID_W];
 	SIMILARITY m_Similarity[GRID_H][GRID_W];
 	RSSIINFO m_CurRssi;
 	CPoint	m_CurPos;
@@ -101,9 +107,10 @@ public:
 
 // Operations
 public:
-	int Localization(CPoint &result,int &score);
-	int MobileLocalization1(CPoint &result,int &score);
-	int MobileLocalization2(CPoint &result,int &score);
+	int Localization(CPoint &result,double &score);
+	int MobileLocalization1(CPoint &result,double &score);
+	int MobileLocalization2(CPoint &result,double &score);
+	int MobileLocalization3(CPoint &result,double &score);
 	void UploadData( int type );
 	void BackupData();
 	void DownloadData();
@@ -140,6 +147,18 @@ public:
 	void SetSimilarity(void);
 public:
 	void SaveMobileLocError(void);
+public:
+	void DeleteMalformedAP(RSSIINFO *r);
+	RSSIINFO GetGridRSSI(RSSIINFO src[GRID_H][GRID_W], int x, int y);
+	void	SetGridRSSI(RSSIINFO dest[GRID_H][GRID_W], int dx, int dy, RSSIINFO src[GRID_H][GRID_W], int sx, int sy);
+	void	DeleteGridRSSI(RSSIINFO dest[GRID_H][GRID_W] , int x , int y );
+public:
+	void ShowRSSVariation(void);
+public:
+	int OpenCompareFile(CString pn);
+public:
+	void GridTest1(void);
+	void GridTest2(void);
 };
 
 

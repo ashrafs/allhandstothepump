@@ -545,11 +545,17 @@ void CWifiScanner::MergeRSSIInfo( RSSIINFO *dest , RSSIINFO *src )
 			if( wcscmp( src->ap[i].ssid , dest->ap[j].ssid ) == 0 )
 			{
 				find = 1;
-				if( dest->ap[j].channel == src->ap[i].channel )
+				if( dest->ap[j].channel == src->ap[i].channel || dest->ap[j].rssi - src->ap[i].rssi > -5.0 && dest->ap[j].rssi - src->ap[i].rssi < 5.0 )
 				{
 					dest->ap[j].rssi = dest->ap[j].rssi * dest->ap[j].count + src->ap[i].rssi * src->ap[i].count;
 					dest->ap[j].count += src->ap[i].count;
 					dest->ap[j].rssi /= dest->ap[j].count;
+#ifdef MEASURE_VARIATION
+					if( dest->ap[j].max < src->ap[i].max )
+						dest->ap[j].max = src->ap[i].max;
+					if( dest->ap[j].min > src->ap[i].min )
+						dest->ap[j].min = src->ap[i].min;
+#endif
 				}
 				else
 				{
@@ -558,8 +564,14 @@ void CWifiScanner::MergeRSSIInfo( RSSIINFO *dest , RSSIINFO *src )
 						dest->ap[j].rssi = src->ap[i].rssi;
 						dest->ap[j].count = src->ap[i].count;
 						dest->ap[j].channel = src->ap[i].channel;
+						dest->ap[j].seq = src->ap[i].seq;
+#ifdef MEASURE_VARIATION
+						dest->ap[j].max = src->ap[i].max;
+						dest->ap[j].min = src->ap[i].min;
+#endif
 					}
 				}
+				break;
 			}
 		}
 		if( find == 0 )
@@ -575,7 +587,7 @@ AFX_THREADPROC th_PacketSniff(void *param )
 	CWifiScanner *p = (CWifiScanner*)param;
 	//int ch = 1;
 	SYSTEMTIME t1,t2;
-	int count = 10;
+	int count = 1000;
 	p->m_RssiBuffer.apnum = 0;
 	p->m_RssiInfo.apnum = 0;
 	AirpcapSetDeviceChannel  ( p->m_Ad, p->m_nChannel );
@@ -637,7 +649,7 @@ AFX_THREADPROC th_PacketSniff(void *param )
 					 p->MinMaxRSSI();
 				 }
 			}
-			count = 10;
+			count = 20000;
 			AirpcapSetDeviceChannel  ( p->m_Ad, p->m_nChannel );
 		}
 		WaitForSingleObject(p->m_ReadEvent, p->m_nScanDelay);
@@ -1568,6 +1580,7 @@ ULONG RadiotapPrint(const u_char *p, ULONG caplen)
 
 int CWifiScanner::ParsePacket(ULONG BufferSize , int ch)
 {
+	static unsigned int seq = 0;
 	BYTE *PacketBuffer = m_PacketBuffer;
 	BYTE *Buf;
 	UINT Off = 0;
@@ -1634,11 +1647,17 @@ int CWifiScanner::ParsePacket(ULONG BufferSize , int ch)
 			if( wcscmp( wid , m_RssiBuffer.ap[i].ssid ) == 0 )
 			{
 				find = 1;
-				if( m_RssiBuffer.ap[i].channel == ch )
+				if( m_RssiBuffer.ap[i].channel == ch || m_RssiBuffer.ap[i].rssi - rssi > -5.0 &&m_RssiBuffer.ap[i].rssi - rssi < 5.0)
 				{
 					m_RssiBuffer.ap[i].rssi = m_RssiBuffer.ap[i].rssi * m_RssiBuffer.ap[i].count + rssi;
 					m_RssiBuffer.ap[i].count++;
 					m_RssiBuffer.ap[i].rssi /= m_RssiBuffer.ap[i].count;
+#ifdef MEASURE_VARIATION
+					if( rssi < m_RssiBuffer.ap[i].min )
+						m_RssiBuffer.ap[i].min = rssi;
+					if( rssi > m_RssiBuffer.ap[i].max )
+						m_RssiBuffer.ap[i].max = rssi;
+#endif
 				}
 				else
 				{
@@ -1647,6 +1666,10 @@ int CWifiScanner::ParsePacket(ULONG BufferSize , int ch)
 						m_RssiBuffer.ap[i].rssi = rssi;
 						m_RssiBuffer.ap[i].count = 1;
 						m_RssiBuffer.ap[i].channel = ch;
+						m_RssiBuffer.ap[i].seq = seq++;
+#ifdef MEASURE_VARIATION
+						m_RssiBuffer.ap[i].min = m_RssiBuffer.ap[i].max = rssi;
+#endif
 					}
 				}
 				break;
@@ -1654,9 +1677,14 @@ int CWifiScanner::ParsePacket(ULONG BufferSize , int ch)
 		}
 		if( !find )
 		{
+#ifdef MEASURE_VARIATION
+			m_RssiBuffer.ap[apnum].rssi = m_RssiBuffer.ap[apnum].min = m_RssiBuffer.ap[apnum].max = rssi;
+#else
 			m_RssiBuffer.ap[apnum].rssi = rssi;
+#endif
 			m_RssiBuffer.ap[apnum].count = 1;
 			m_RssiBuffer.ap[apnum].channel = ch;
+			m_RssiBuffer.ap[apnum].seq = seq++;
 			wcscpy( m_RssiBuffer.ap[apnum].ssid , wid );
 			apnum++;
 		}
@@ -1851,11 +1879,11 @@ int CWifiScanner::GetRSSIfromAirPCap(CListCtrl *pList , RSSIINFO &r )
 	
 	int i,j;
 	RSSIINFO m;
-	if( m_RssiInfo.apnum == 0 )
-		m = m_RssiBuffer2;
-	else
-		m = m_RssiInfo;
-	//MergeRSSIInfo( &m , &m_RssiBuffer );
+	//if( m_RssiInfo.apnum == 0 )
+	//	m = m_RssiBuffer2;
+	//else
+	m = m_RssiInfo;
+	MergeRSSIInfo( &m , &m_RssiBuffer );
 	for( i = 0 ; i < m.apnum ; ++i )
 	{
 		int find = 0;
@@ -1878,6 +1906,7 @@ int CWifiScanner::GetRSSIfromAirPCap(CListCtrl *pList , RSSIINFO &r )
 
 	}
 	m_RssiInfo.apnum = 0;
+	m_RssiBuffer.apnum = 0;
 	pList->DeleteAllItems();
 	for( i = 0; i < r.apnum ; ++i )
 	{

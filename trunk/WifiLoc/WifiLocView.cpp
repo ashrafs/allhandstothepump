@@ -152,13 +152,15 @@ void CWifiLocView::OnDraw(CDC* pDC)
 	gridPen.CreatePenIndirect(&lp);
 	CPen *oldpen = (CPen*) m_memDC.SelectObject(&gridPen);
 	int i;
-	for( i = 0 ; i < r.Width() ; i += GRID_SIZE )
+	for( i = 0 ; i < r.Width() ; i += GRID_SIZE * pDoc->m_nGridSize )
 	{
+		//continue;
 		m_memDC.MoveTo( i , 0 );
 		m_memDC.LineTo( i , r.Height() - 1 );
 	}
-	for( i = 0 ; i < r.Height() ; i += GRID_SIZE )
+	for( i = 0 ; i < r.Height() ; i += GRID_SIZE * pDoc->m_nGridSize )
 	{
+		//continue;
 		m_memDC.MoveTo( 0 , i );
 		m_memDC.LineTo( r.Width() - 1 , i );
 	}
@@ -166,13 +168,13 @@ void CWifiLocView::OnDraw(CDC* pDC)
 	gridPen.DeleteObject();
 
 	
-	/*int gRed[3] = { 0 , 128 , 255 };
+	int gRed[3] = { 0 , 128 , 255 };
 	int gGreen[3] = { 0 , 128 , 255 };
-	int gBlue[3] = { 0 , 128 ,255 };*/
+	int gBlue[3] = { 0 , 128 ,255 };
 
-	int gRed[3] = { 255 , 180 , 0 };
+	/*int gRed[3] = { 255 , 180 , 0 };
 	int gGreen[3] = { 255 , 180 , 0 };
-	int gBlue[3] = { 255 , 180 , 0 };
+	int gBlue[3] = { 255 , 180 , 0 };*/
 
 	int rankval = 51;
 	BITMAP b;
@@ -184,29 +186,114 @@ void CWifiLocView::OnDraw(CDC* pDC)
 	DWORD *bitmap = (DWORD*)m_pBitmap;
 	memcpy( temp , bitmap , 4000 );
 	
-	if( pBox->GetCurSel() == 1 ||pBox->GetCurSel() == 2)	//Reliability
+	if( pBox->GetCurSel() == 1 )	//Reliability
 	{
-		for( int i = 0 ; i < GRID_H ; ++i )
+		for( int i = 0 ; i < GRID_H ; i += pDoc->m_nGridSize )
 		{
-			for( int j = 0 ; j < GRID_W ; ++j )
+			for( int j = 0 ; j < GRID_W ; j += pDoc->m_nGridSize )
 			{
-				if( pDoc->m_RssiDB[i][j].apnum > 0 && ( pBox->GetCurSel() == 2 || pDoc->m_RssiDB[i][j].trust * 100 >= TRUST_THRESHOLD ) )
+				if( i == 18 && j == 8 )
+					i=i;
+				RSSIINFO rr = pDoc->GetGridRSSI( pDoc->m_RssiDB , j , i );
+				if( rr.apnum > 0 && ( pBox->GetCurSel() == 2 || GetErrorFromTrust( rr.trust ) <= ERROR_THRESHOLD ) )
 				{
 					CBrush eb;
 					
-					if( pDoc->m_RssiDB[i][j].trust == 1.0 )
+					if( rr.trust == 1.0 )
 					{
 						int ddd = 0;
 					}
-					int rank = ((int)(pDoc->m_RssiDB[i][j].trust * 100)) / rankval;
-					int rindex = ((int)(pDoc->m_RssiDB[i][j].trust * 100)) % rankval;
+					int error = GetErrorFromTrust(rr.trust ) * 10;
+					if( error > 100 )
+						error = 100;
+					int rank = ((int)(error)) / rankval;
+					int rindex = ((int)(error)) % rankval;
 					int red = gRed[rank] + ( gRed[rank+1] - gRed[rank] ) * rindex / rankval;
 					int green = gGreen[rank] + ( gGreen[rank+1] - gGreen[rank] ) * rindex / rankval;
 					int blue = gBlue[rank] + ( gBlue[rank+1] - gBlue[rank]) * rindex / rankval;
-					for( int k = i*GRID_SIZE ; k <= (i+1)*GRID_SIZE ; ++k )
+					for( int k = i*GRID_SIZE ; k < (i+pDoc->m_nGridSize)*GRID_SIZE ; ++k )
 					{
 						if( k >= b.bmHeight ) continue;
-						for( int l = j*GRID_SIZE ; l <= (j+1)*GRID_SIZE ; ++l )
+						for( int l = j*GRID_SIZE ; l < (j+pDoc->m_nGridSize)*GRID_SIZE ; ++l )
+						{
+							
+							COLORREF color = (COLORREF) bitmap[ k * b.bmWidth + l ];
+							//COLORREF color = m_memDC.GetPixel( l , k );
+							int ab = ( ( color & 0xFF ) * 0.3 + blue *0.7);// / 2;
+							int ag = ( ( (color>>8) & 0xFF )*0.3 + green *0.7);// / 2;
+							int ar = ( ( (color>>16) & 0xFF )*0.3 + red *0.7);// / 2;
+							bitmap[ k * b.bmWidth + l ] = (DWORD)(RGB( ab,ag,ar ));
+							//m_memDC.SetPixelV(l,k,RGB(ar,ag,ab));
+							
+		
+						}
+					}
+					//m_memDC.GetPixel
+					/*eb.CreateSolidBrush(RGB(red,green,blue) );
+					CBrush *oldb = (CBrush*)m_memDC.SelectObject(&eb);
+					CRect grid(j*GRID_SIZE+1,i*GRID_SIZE+1,(j+1)*GRID_SIZE,(i+1)*GRID_SIZE);
+					//m_memDC.FillRect(grid,NULL);
+					m_memDC.SelectObject(oldb);
+					eb.DeleteObject();*/
+				}
+				else
+				{
+					int error = 100;
+					int rank = ((int)(error)) / rankval;
+					int rindex = ((int)(error)) % rankval;
+					int red = gRed[rank] + ( gRed[rank+1] - gRed[rank] ) * rindex / rankval;
+					int green = gGreen[rank] + ( gGreen[rank+1] - gGreen[rank] ) * rindex / rankval;
+					int blue = gBlue[rank] + ( gBlue[rank+1] - gBlue[rank]) * rindex / rankval;
+					for( int k = i*GRID_SIZE ; k < (i+pDoc->m_nGridSize)*GRID_SIZE ; ++k )
+					{
+						if( k >= b.bmHeight ) continue;
+						for( int l = j*GRID_SIZE ; l < (j+pDoc->m_nGridSize)*GRID_SIZE ; ++l )
+						{
+							
+							COLORREF color = (COLORREF) bitmap[ k * b.bmWidth + l ];
+							//COLORREF color = m_memDC.GetPixel( l , k );
+							int ab = ( ( color & 0xFF ) * 0.3 + blue *0.7);// / 2;
+							int ag = ( ( (color>>8) & 0xFF )*0.3 + green *0.7);// / 2;
+							int ar = ( ( (color>>16) & 0xFF )*0.3 + red *0.7);// / 2;
+							bitmap[ k * b.bmWidth + l ] = (DWORD)(RGB( ab,ag,ar ));
+							//m_memDC.SetPixelV(l,k,RGB(ar,ag,ab));
+							
+		
+						}
+					}
+				}
+			}
+			
+		}
+	}
+	if( pBox->GetCurSel() == 2 )	//Similarity
+	{
+		for( int i = 0 ; i < GRID_H ; i += pDoc->m_nGridSize )
+		{
+			for( int j = 0 ; j < GRID_W ; j += pDoc->m_nGridSize )
+			{
+				RSSIINFO gg = pDoc->GetGridRSSI( pDoc->m_GlobalDB , j , i );
+				if( gg.apnum > 0 )//&& ( pBox->GetCurSel() == 2 || GetErrorFromTrust( pDoc->m_GlobalDB[i][j].trust ) <= ERROR_THRESHOLD ) )
+				{
+					CBrush eb;
+					
+					if( gg.trust == 1.0 )
+					{
+						int ddd = 0;
+					}
+					int error = GetErrorFromTrust( gg.trust ) * 10;
+					error = 100;
+					if( error > 100 )
+						error = 100;
+					int rank = (error) / rankval;
+					int rindex = (error) % rankval;
+					int red = gRed[rank] + ( gRed[rank+1] - gRed[rank] ) * rindex / rankval;
+					int green = gGreen[rank] + ( gGreen[rank+1] - gGreen[rank] ) * rindex / rankval;
+					int blue = gBlue[rank] + ( gBlue[rank+1] - gBlue[rank]) * rindex / rankval;
+					for( int k = i*GRID_SIZE ; k < (i+pDoc->m_nGridSize)*GRID_SIZE ; ++k )
+					{
+						if( k >= b.bmHeight ) continue;
+						for( int l = j*GRID_SIZE ; l < (j+pDoc->m_nGridSize)*GRID_SIZE ; ++l )
 						{
 							
 							COLORREF color = (COLORREF) bitmap[ k * b.bmWidth + l ];
@@ -243,7 +330,8 @@ void CWifiLocView::OnDraw(CDC* pDC)
 				//pen.CreatePen( PS_SOLID , 3 , RGB(rand()%256,rand()%256,rand()%256 ) );
 				
 				//CPen *op = (CPen*)m_memDC.SelectObject( &pen );
-				DrawArrow( &m_memDC , 2 , RGB( 255 , 255 , 255 ) , RGB(0,0,0) , j*GRID_SIZE+GRID_SIZE/2,i*GRID_SIZE+GRID_SIZE/2,pDoc->m_Similarity[i][j].x*GRID_SIZE + GRID_SIZE / 2 , pDoc->m_Similarity[i][j].y * GRID_SIZE + GRID_SIZE / 2);
+				m_memDC.SelectStockObject(BLACK_PEN);
+				DrawArrow( &m_memDC , 1 , RGB( 0 , 0 , 0 ) , RGB(0,0,0) , j*GRID_SIZE+GRID_SIZE/2,i*GRID_SIZE+GRID_SIZE/2,pDoc->m_Similarity[i][j].x*GRID_SIZE + GRID_SIZE / 2 , pDoc->m_Similarity[i][j].y * GRID_SIZE + GRID_SIZE / 2);
 				//m_memDC.MoveTo(j*GRID_SIZE + GRID_SIZE / 2, i * GRID_SIZE + GRID_SIZE / 2);
 				//m_memDC.LineTo(pDoc->m_Similarity[i][j].x*GRID_SIZE + GRID_SIZE / 2 , pDoc->m_Similarity[i][j].y * GRID_SIZE + GRID_SIZE / 2);
 				//m_memDC.SelectObject(op);
@@ -251,7 +339,101 @@ void CWifiLocView::OnDraw(CDC* pDC)
 			}
 		}
 	}
-
+	if( pBox->GetCurSel() == 4 )	//Difference
+	{
+		for( int i = 0 ; i < GRID_H ; i += pDoc->m_nGridSize )
+		{
+			for( int j = 0 ; j < GRID_W ; j += pDoc->m_nGridSize )
+			{
+				int ax[4]={0,0,1,-1};
+				int ay[4]={1,-1,0,0};
+				RSSIINFO r1 = pDoc->GetGridRSSI( pDoc->m_RssiDB , j , i );
+				if( r1.apnum <= 0 )continue;
+				int nc = 0;
+				int differ = 0;
+				for( int k = 0 ; k < 4 ; ++k )
+				{
+					int xx = j + ax[k] * pDoc->m_nGridSize;
+					int yy = i + ay[k] * pDoc->m_nGridSize;
+					if( xx < 0 || xx >= GRID_W )continue;
+					if( yy < 0 || yy >= GRID_H )continue;
+					RSSIINFO r2 = pDoc->GetGridRSSI( pDoc->m_RssiDB , xx, yy );
+					if( r2.apnum > 0 )
+					{
+						CBrush eb;
+						nc++;
+						int cc;
+						double sc;
+						sc = GetLandmarkDegree( r1,r2 );//GetErrorFromTrust(pDoc->m_RssiDB[i][j].trust ) * 10;
+						
+						if( differ == 0 || differ < sc )
+						{
+							differ = sc;
+							GetLandmarkDegree( r1,r2 );
+						}
+					}
+				}
+				if( !nc )
+				{
+					int axx[4]={1,-1,1,-1};
+					int ayy[4]={1,-1,-1,1};
+					for( int k = 0 ; k < 4 ; ++k )
+					{
+						int xx = j + axx[k] * pDoc->m_nGridSize;
+						int yy = i + ayy[k] * pDoc->m_nGridSize;
+						if( xx < 0 || xx >= GRID_W )continue;
+						if( yy < 0 || yy >= GRID_H )continue;
+						RSSIINFO r2 = pDoc->GetGridRSSI(pDoc->m_RssiDB,xx,yy);
+						if( r2.apnum > 0 )
+						{
+							nc++;
+							int cc;
+							double sc;
+							sc = GetLandmarkDegree( r1,r2  );//GetErrorFromTrust(pDoc->m_RssiDB[i][j].trust ) * 10;
+							//if( cc )
+							//	sc /= cc;
+							if( differ == 0 || differ < sc )
+								differ = sc;
+						}
+					}
+				}
+				if( nc )
+				{
+					//differ /= nc;
+					differ *= 10;
+					//if( differ >= 100 )
+					//	differ = 99;
+					//differ = 100 - differ;
+					int rank = ((int)(differ)) / rankval;
+					int rindex = ((int)(differ)) % rankval;
+					int red = gRed[rank] + ( gRed[rank+1] - gRed[rank] ) * rindex / rankval;
+					int green = gGreen[rank] + ( gGreen[rank+1] - gGreen[rank] ) * rindex / rankval;
+					int blue = gBlue[rank] + ( gBlue[rank+1] - gBlue[rank]) * rindex / rankval;
+					for( int k = i*GRID_SIZE ; k < (i+pDoc->m_nGridSize)*GRID_SIZE ; ++k )
+					{
+						if( k >= b.bmHeight ) continue;
+						for( int l = j*GRID_SIZE ; l < (j+pDoc->m_nGridSize)*GRID_SIZE ; ++l )
+						{
+							
+							COLORREF color = (COLORREF) bitmap[ k * b.bmWidth + l ];
+							//COLORREF color = m_memDC.GetPixel( l , k );
+							int ab = ( ( color & 0xFF ) * 0.3 + blue *0.7);// / 2;
+							int ag = ( ( (color>>8) & 0xFF )*0.3 + green *0.7);// / 2;
+							int ar = ( ( (color>>16) & 0xFF )*0.3 + red *0.7);// / 2;
+							bitmap[ k * b.bmWidth + l ] = (DWORD)(RGB( ab,ag,ar ));
+							//m_memDC.SetPixelV(l,k,RGB(ar,ag,ab));
+							
+		
+						}
+					}
+					WCHAR differtext[10];
+					wsprintf(differtext,_T("%02d"),differ);
+					m_memDC.TextOutW( j*GRID_SIZE , i * GRID_SIZE , differtext , 2 );
+				}
+			}
+			
+		}
+	}
 	
 
 	lp.lopnColor = RGB( 0 , 0 , 255 );
@@ -349,8 +531,11 @@ void CWifiLocView::OnDraw(CDC* pDC)
 	m_memDC.SelectObject(oldpen);
 
 	
-
+#ifndef VIRTUAL_TRAINING
 	if( pDoc->m_nState == ST_LOC_MOBILE )// || pDoc->m_nState == ST_GROUNDTRUTH )
+#else
+	if( pDoc->m_nState == ST_TRAINING )// || pDoc->m_nState == ST_GROUNDTRUTH )
+#endif
 	{
 		//gridPen.DeleteObject();
 		lp.lopnColor = RGB( 255 , 0 , 0 );
@@ -366,7 +551,7 @@ void CWifiLocView::OnDraw(CDC* pDC)
 			{
 				CPoint pt = pFrame->m_VirtualINS.GetPoint();
 				m_memDC.MoveTo(path->start.x * GRID_SIZE + GRID_SIZE / 2 + 2 , path->start.y * GRID_SIZE + GRID_SIZE / 2 + 2 );
-				m_memDC.LineTo(pt);
+				m_memDC.LineTo(pt.x , pt.y);
 				break;
 			}
 			else
@@ -386,7 +571,9 @@ void CWifiLocView::OnDraw(CDC* pDC)
 	//		m_memDC.SelectObject(oldpen);
 	//	}
 	}
+
 	else //if( pDoc->m_nState == ST_LOCALIZATION )
+
 	{
 		
 		CRect cursor(pDoc->m_Cursor.x * GRID_SIZE , pDoc->m_Cursor.y * GRID_SIZE , pDoc->m_Cursor.x * GRID_SIZE + GRID_SIZE , pDoc->m_Cursor.y * GRID_SIZE + GRID_SIZE);
@@ -400,7 +587,7 @@ void CWifiLocView::OnDraw(CDC* pDC)
 		m_memDC.SelectObject(ob);
 		b.DeleteObject();
 	}
-	
+
 	CRect cur(pDoc->m_Cursor.x * GRID_SIZE , pDoc->m_Cursor.y * GRID_SIZE , pDoc->m_Cursor.x * GRID_SIZE + GRID_SIZE + 1  , pDoc->m_Cursor.y * GRID_SIZE + GRID_SIZE+1);
 	m_memDC.SelectStockObject( BLACK_PEN );
 	m_memDC.SelectStockObject( NULL_BRUSH );
@@ -474,6 +661,7 @@ void CWifiLocView::OnTimer(UINT_PTR nIDEvent)
 	if( pDoc->m_nState == ST_GROUNDTRUTH )
 	{
 		pDoc->m_Scanner.GetRSSIfromAirPCap((CListCtrl*)pFrame->m_wndConfigDlg.GetDlgItem(IDC_LIST_RSSI) , pDoc->m_RssiDB[pDoc->m_Cursor.y][pDoc->m_Cursor.x] );
+		pDoc->m_RssiDB[pDoc->m_Cursor.y][pDoc->m_Cursor.x].trust = 0.0;
 		CPoint index = pDoc->m_Cursor;
 		CListCtrl *pList = (CListCtrl*)pFrame->m_wndConfigDlg.GetDlgItem(IDC_LIST_FINGERPRINT);
 		pList->DeleteAllItems();
@@ -502,15 +690,15 @@ void CWifiLocView::OnTimer(UINT_PTR nIDEvent)
 			pList->SetItemText( iRow,iColumn,(LPCTSTR)text);      //화면에 나타낸다
 		}
 		WCHAR text[100];
-		int miss = 0;
+		/*int miss = 0;
 		int count = 0;
 		for( int i = 0 ; i < ri->apnum ; ++i )
 		{
-			miss += pDoc->m_Scanner.m_nScanCount - ri->ap[i].count;
+			miss += ( pDoc->m_Scanner.m_nScanCount + 1 ) - ri->ap[i].count;
 			count += ri->ap[i].count;
 		}
-		ri->trust = count;
-		wsprintf(text,_T("Done:%d,%d/%d(%d\%)") , count , miss , pDoc->m_Scanner.m_nScanCount * ri->apnum , miss * 100 / (pDoc->m_Scanner.m_nScanCount*ri->apnum) );
+		ri->trust = count;*/
+		wsprintf(text,_T("Done:"));//%d,%d/%d(%d\%)") , count , miss , ( pDoc->m_Scanner.m_nScanCount + 1 ) * ri->apnum , miss * 100 / ((pDoc->m_Scanner.m_nScanCount + 1 )*ri->apnum) );
 
 		AfxMessageBox(text);
 	}
@@ -519,7 +707,7 @@ void CWifiLocView::OnTimer(UINT_PTR nIDEvent)
 		memset( &pDoc->m_CurRssi , 0x00 , sizeof( RSSIINFO ) );
 		pDoc->m_Scanner.GetRSSIfromAirPCap((CListCtrl*)pFrame->m_wndConfigDlg.GetDlgItem(IDC_LIST_RSSI) , pDoc->m_CurRssi );
 		CPoint result;
-		int score;
+		double score;
 		pDoc->Localization(result,score);
 		Invalidate(FALSE);
 	}
@@ -542,7 +730,7 @@ void CWifiLocView::OnTimer(UINT_PTR nIDEvent)
 			pDoc->m_Scanner.m_RssiInfo.apnum = 0;
 			pDoc->m_Scanner.m_nScanCount = 0;
 			CPoint result;
-			int score;
+			double score;
 			if( pDoc->MobileLocalization1(result,score) )
 			{
 				PATH *path = (PATH*)pDoc->m_TrackPath1.GetTail();
@@ -572,6 +760,21 @@ void CWifiLocView::OnTimer(UINT_PTR nIDEvent)
 				np->end.y = prev.y;
 				pDoc->m_TrackPath2.AddTail( np );
 			}
+
+			if( pDoc->MobileLocalization3(result,score) )
+			{
+				PATH *path = (PATH*)pDoc->m_TrackPath3.GetTail();
+				result = path->start;
+			}
+			//else
+			{
+				PATH *np = new PATH;
+				np->start.x = result.x;
+				np->start.y = result.y;
+				np->end.x = prev.x;
+				np->end.y = prev.y;
+				pDoc->m_TrackPath3.AddTail( np );
+			}
 			
 		}
 		Invalidate(FALSE);
@@ -586,7 +789,7 @@ void CWifiLocView::OnLButtonUp(UINT nFlags, CPoint point)
 	PATH *cur;
 	point.x /= GRID_SIZE;
 	point.y /= GRID_SIZE;
-	if( pDoc->m_nState == ST_CHECK || pDoc->m_nState == ST_GROUNDTRUTH || pDoc->m_nState == ST_LOC_MOBILE || pDoc->m_nState == ST_LOC_STATIC )
+	if( pDoc->m_nState == ST_TRAINING || pDoc->m_nState == ST_CHECK || pDoc->m_nState == ST_GROUNDTRUTH || pDoc->m_nState == ST_LOC_MOBILE || pDoc->m_nState == ST_LOC_STATIC )
 		return;
 	if( m_nPathStep == PATH_END )
 		return;
@@ -609,7 +812,7 @@ void CWifiLocView::OnRButtonUp(UINT nFlags, CPoint point)
 	CWifiLocDoc *pDoc = GetDocument();
 	point.x /= GRID_SIZE;
 	point.y /= GRID_SIZE;
-	if( pDoc->m_nState == ST_CHECK || pDoc->m_nState == ST_GROUNDTRUTH || pDoc->m_nState == ST_LOC_MOBILE || pDoc->m_nState == ST_LOC_STATIC )
+	if( pDoc->m_nState == ST_TRAINING || pDoc->m_nState == ST_CHECK || pDoc->m_nState == ST_GROUNDTRUTH || pDoc->m_nState == ST_LOC_MOBILE || pDoc->m_nState == ST_LOC_STATIC )
 		return;
 	PATH *tail = NULL;
 	if( pDoc->m_Path.GetCount() )
@@ -631,7 +834,7 @@ void CWifiLocView::OnMButtonUp(UINT nFlags, CPoint point)
 	CWifiLocDoc *pDoc = GetDocument();
 	point.x /= GRID_SIZE;
 	point.y /= GRID_SIZE;
-	if( pDoc->m_nState == ST_CHECK || pDoc->m_nState == ST_GROUNDTRUTH || pDoc->m_nState == ST_LOC_MOBILE || pDoc->m_nState == ST_LOC_STATIC )
+	if( pDoc->m_nState == ST_TRAINING || pDoc->m_nState == ST_CHECK || pDoc->m_nState == ST_GROUNDTRUTH || pDoc->m_nState == ST_LOC_MOBILE || pDoc->m_nState == ST_LOC_STATIC )
 		return;
 	
 	PATH *tail = NULL;
@@ -653,9 +856,13 @@ void CWifiLocView::OnMouseMove(UINT nFlags, CPoint point)
 {
 	// TODO: Add your message handler code here and/or call default
 	CWifiLocDoc *pDoc = GetDocument();
+	CMainFrame * pFrame = (CMainFrame*)AfxGetMainWnd();
 	point.x /= GRID_SIZE;
 	point.y /= GRID_SIZE;
-	if( pDoc->m_nState == ST_CHECK || pDoc->m_nState == ST_GROUNDTRUTH || pDoc->m_nState == ST_LOC_MOBILE || pDoc->m_nState == ST_LOC_STATIC )
+	WCHAR text[100];
+	wsprintf(text,_T("(%d,%d)"), point.x,point.y);
+	pFrame->m_wndStatusBar.SetPaneText(0,text);
+	if( pDoc->m_nState == ST_TRAINING || pDoc->m_nState == ST_CHECK || pDoc->m_nState == ST_GROUNDTRUTH || pDoc->m_nState == ST_LOC_MOBILE || pDoc->m_nState == ST_LOC_STATIC )
 		return;
 	
 	
@@ -685,7 +892,8 @@ void CWifiLocView::UpdateCursorRSSI()
 	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
 	CListCtrl *pList = (CListCtrl*)pFrame->m_wndConfigDlg.GetDlgItem(IDC_LIST_FINGERPRINT);
 	pList->DeleteAllItems();
-	RSSIINFO *ri = &pDoc->m_RssiDB[pDoc->m_Cursor.y][pDoc->m_Cursor.x];
+	RSSIINFO rr = pDoc->GetGridRSSI( pDoc->m_RssiDB , pDoc->m_Cursor.x, pDoc->m_Cursor.y );
+	RSSIINFO *ri = &rr;//pDoc->m_RssiDB[pDoc->m_Cursor.y][pDoc->m_Cursor.x];
 	//RSSIINFO *ri = &pDoc->m_GlobalDB[pDoc->m_Cursor.y][pDoc->m_Cursor.x];
 	for( int i = 0 ; i < ri->apnum ; ++i )
 	{
@@ -706,17 +914,21 @@ void CWifiLocView::UpdateCursorRSSI()
 		iColumn = 1;
 		pList->SetItemText( iRow,iColumn,(LPCTSTR)text);      //화면에 나타낸다
 		
-		wsprintf((LPWSTR)text , _T("%d") , (int)(ri->trust*100) );
+		wsprintf((LPWSTR)text , _T("%d") , (int)(GetErrorFromTrust(ri->trust)*100) );
 		//_ftow(ri->trust,(wchar_t *)text,10);
 		iColumn = 2;
 		pList->SetItemText( iRow,iColumn,(LPCTSTR)text);      //화면에 나타낸다
 
-		_itow(ri->ap[i].count,(wchar_t *)text,10);
+		_itow(ri->ap[i].seq,(wchar_t *)text,10);
 		iColumn = 3;
 		pList->SetItemText( iRow,iColumn,(LPCTSTR)text);      //화면에 나타낸다
 
-		_itow(ri->ap[i].channel,(wchar_t *)text,10);
+		_itow(ri->ap[i].count,(wchar_t *)text,10);
 		iColumn = 4;
+		pList->SetItemText( iRow,iColumn,(LPCTSTR)text);      //화면에 나타낸다
+
+		_itow(ri->ap[i].channel,(wchar_t *)text,10);
+		iColumn = 5;
 		pList->SetItemText( iRow,iColumn,(LPCTSTR)text);      //화면에 나타낸다
 	}
 }
@@ -818,15 +1030,26 @@ void CWifiLocView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 			Invalidate(FALSE);
 			break;
 		case VK_ESCAPE:
-			pDoc->m_RssiDB[pDoc->m_Cursor.y][pDoc->m_Cursor.x].apnum = 0;
+			pDoc->DeleteGridRSSI( pDoc->m_RssiDB , pDoc->m_Cursor.x , pDoc->m_Cursor.y );
 			break;
 		case VK_RETURN:
 			if( pDoc->m_nState == ST_GROUNDTRUTH )
 				SetTimer( 1 , TIMER_GROUNDTRUTH , NULL );
 			else if( pDoc->m_nState == ST_LOC_STATIC )
+			{
 				SetTimer( 1 , pDoc->m_nLocTime , NULL );
+				pDoc->m_Scanner.m_RssiInfo.apnum = 0;
+				pDoc->m_Scanner.m_RssiBuffer.apnum = 0;
+				//RSSIINFO temp;
+				//pDoc->m_Scanner.GetRSSIfromAirPCap((CListCtrl*)pFrame->m_wndConfigDlg.GetDlgItem(IDC_LIST_RSSI) , temp );
+				
+			}
 			pDoc->m_Scanner.m_RssiInfo.apnum = 0;
 			pDoc->m_Scanner.m_nScanCount = 0;
+			
+			
+			
+			Invalidate(FALSE);
 			//pDoc->m_Scanner.m_nChannel = 14;
 			break;
 		}
@@ -929,6 +1152,8 @@ void CWifiLocView::OnLButtonDblClk(UINT nFlags, CPoint point)
 	RSSIINFO *r2 = &pDoc->m_GlobalDB[ pDoc->m_Cursor.y ][ pDoc->m_Cursor.x ];
 	CompareRSSI(r1,r2);
 	Invalidate(FALSE);*/
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	pFrame->IPC_SendStartMessage(point.x/GRID_SIZE,point.y / GRID_SIZE );
 	CView::OnLButtonDblClk(nFlags, point);
 }
 
@@ -1034,7 +1259,7 @@ void CWifiLocView::DrawArrow(CDC* pDC, int nWidth, COLORREF nColorIn, COLORREF n
 		siny = sin(slopy);
 	}
  
-    pDC->SelectObject(CreatePen(PS_DOT , nWidth - 1, nColorIn));
+    pDC->SelectObject(CreatePen(PS_SOLID , nWidth - 1, nColorIn));
     pDC->MoveTo(m_One.x, m_One.y);
     pDC->LineTo(m_Two.x, m_Two.y);
     pDC->MoveTo(m_One.x, m_One.y);
@@ -1064,7 +1289,7 @@ void CWifiLocView::DrawArrow(CDC* pDC, int nWidth, COLORREF nColorIn, COLORREF n
     pt[2].y = m_Two.y - int(Par / 2.0 * cosy - Par * siny + 0.5);
  
     pDC->SelectObject(GetStockObject(BLACK_BRUSH)); //BLACK_BRUSH
-    pDC->SelectObject(CreatePen(PS_DOT, nWidth - 1, nColorIn));
+    pDC->SelectObject(CreatePen(PS_SOLID, nWidth - 1, nColorIn));
     pDC->Polygon(pt, 3);
     DeleteObject(pDC->SelectObject(GetStockObject(BLACK_PEN)));
 }

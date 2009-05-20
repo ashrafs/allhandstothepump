@@ -180,6 +180,7 @@ void CMainFrame::OnTimer(UINT_PTR nIDEvent)
 {
 	// TODO: Add your message handler code here and/or call default
 	CWifiLocDoc *pDoc = (CWifiLocDoc*)GetActiveDocument();
+	
 	//WCHAR text[100];
 	//wcscpy( text , _T("WifiLoc") );
 	//::SetWindowText( this->GetSafeHwnd() , text );
@@ -197,6 +198,7 @@ void CMainFrame::OnTimer(UINT_PTR nIDEvent)
 	}
 	else if( pDoc->m_nState == ST_TRAINING )
 	{
+#ifdef VIRTUAL_TRAINING			//Virtual Training//
 		/*if( m_VirtualINS.Move() )
 		{
 			pDoc->m_nState = ST_CHECK;
@@ -211,9 +213,24 @@ void CMainFrame::OnTimer(UINT_PTR nIDEvent)
 		//	pDoc->m_Scanner.GetVisibleNetworkList((CListCtrl*)m_wndConfigDlg.GetDlgItem(IDC_LIST_RSSI) , &pDoc->m_RssiDB[index.y][index.x] );
 		//else
 		//	pDoc->m_Scanner.Scan();
-		//pDoc->m_Scanner.GetBssList(&pDoc->m_RssiDB[index.y][index.x]);
+		//pDoc->m_Scanner.GetBssList(&pDoc->m_RssiDB[index.y][index.x]);*/
+		CPoint prev = m_VirtualINS.GetGrid();
+		if( m_VirtualINS.Move() )
+		{
+			pDoc->m_nState = ST_CHECK;
+			KillTimer(0);
+			
+		}
+		if( pDoc->m_nState == ST_CHECK )
+			AfxMessageBox(_T("Training Complete!!") , MB_OK );
+		CPoint cur = m_VirtualINS.GetGrid();
+		if( prev.x != cur.x || prev.y != cur.y )
+		{
+			pDoc->m_Scanner.GetRSSIfromAirPCap((CListCtrl*)m_wndConfigDlg.GetDlgItem(IDC_LIST_RSSI) , pDoc->m_RssiDB[prev.y][prev.x] );
+		}
 		CWifiLocView *pView = (CWifiLocView*)GetActiveView();
-		pView->Invalidate(FALSE);*/
+		pView->Invalidate(FALSE);
+#endif
 	}
 	else if( pDoc->m_nState == ST_GROUNDTRUTH )
 	{
@@ -316,9 +333,12 @@ int CMainFrame::IPC_SendStartMessage(int x , int y)
 	}*/
 
 	char *text = (char*)::HeapAlloc(::GetProcessHeap(), HEAP_ZERO_MEMORY, 100);
-	sprintf( text , "%d,%d,%f" , x , y , 20.0 );
+	x -= 32;
+	y -= 30;
+	y *= -1;
+	sprintf( text , "%d,%d,%f" , x , y , 0.003f );
     COPYDATASTRUCT tip;
-    tip.dwData = IPC_PROTOCOL_INSDATA;
+    tip.dwData = IPC_PROTOCOL_START;
     tip.cbData = 100;
     tip.lpData = text;
     if(IsWindow(m_wndINS)) return_value = ::SendMessage(m_wndINS, WM_COPYDATA,(WPARAM)m_wndINS, (LPARAM)&tip);
@@ -353,8 +373,8 @@ int CMainFrame::IPC_SendWifiData(int x , int y , double trust)
 		p_buffer->trust = trust;
 	}*/
 
-	x -= 16;
-	y -= 15;
+	x -= 32;
+	y -= 30;
 	y *= -1;
 	char *text = (char*)::HeapAlloc(::GetProcessHeap(), HEAP_ZERO_MEMORY, 100);
 	sprintf( text , "%d,%d,%f" , x , y , GetErrorFromTrust(trust) );
@@ -386,9 +406,11 @@ BOOL CMainFrame::OnCopyData(CWnd* pWnd, COPYDATASTRUCT* pCopyDataStruct)
 			x = _ttoi(token);
 			token = str.Tokenize(_T(","),curpos);
 			y = _ttoi(token);
-			x += 16;
+			x += 32;
 			y *= -1;
-			y += 15;
+			y += 30;
+			//x = 0;
+			//y = 0;
 			pDoc->m_nState = ST_TRAINING;
 			pDoc->m_Scanner.m_RssiInfo.apnum = 0;
 			pDoc->m_CurPos.x = x;
@@ -416,7 +438,7 @@ BOOL CMainFrame::OnCopyData(CWnd* pWnd, COPYDATASTRUCT* pCopyDataStruct)
 			token = str.Tokenize(_T(","),curpos);
 			data.trust = _wtof(token);
 			
-
+			
             //MessageBox(str);
            
 
@@ -425,12 +447,20 @@ BOOL CMainFrame::OnCopyData(CWnd* pWnd, COPYDATASTRUCT* pCopyDataStruct)
 			pDoc->m_Scanner.GetRSSIfromAirPCap((CListCtrl*)m_wndConfigDlg.GetDlgItem(IDC_LIST_RSSI) , pDoc->m_CurRssi );
 			 pDoc->RecordRSSI();
             data.y *= -1;
-			data.y += 15;
-			data.x += 16;
+			data.y += 30;
+			data.x += 32;
 			data.trust = GetTrustFromError( data.trust );
 			if( data.trust < 0 )
 				data.trust = 0;
 			
+
+			//data.x = pDoc->m_CurPos.x+1;
+			//data.y = pDoc->m_CurPos.y;
+			if( data.x >= GRID_W )
+			{
+				data.x = 0;
+				data.y++;
+			}
 			if( data.x < 0 )
 				data.x = 0;
 			if( data.x >= GRID_W )
@@ -440,16 +470,17 @@ BOOL CMainFrame::OnCopyData(CWnd* pWnd, COPYDATASTRUCT* pCopyDataStruct)
 			if( data.y >= GRID_H )
 				data.y = GRID_H - 1;
 
-			int score;
+
+			double score;
 			CPoint loc;
 			/*if( pDoc->Localization(loc , score) == 0 )
 			{
-				RSSIINFO *revised = &pDoc->m_GlobalDB[ loc.y ][ loc.x ];
+				RSSIINFO revised = pDoc->GetGridRSSI( pDoc->m_RssiDB , loc.x,loc.y );//[ loc.y ][ loc.x ];
 				double err1 = GetErrorFromTrust( data.trust );
-				double err2 = GetErrorFromTrust( revised->trust ) + FINGERPRINT_ERROR;
+				double err2 = GetErrorFromTrust( revised.trust ) + FINGERPRINT_ERROR;
 				if( m_nLocCount )
 					m_nLocCount--;
-				if( !m_nLocCount && err1 >= 10 && err2 < err1 && score < 5 )
+				if( !m_nLocCount && err1 >= 10 && err2 < err1 && score < SIMILAR_THRESHOLD )
 				{
 					data.x = loc.x;
 					data.y = loc.y;
@@ -475,7 +506,8 @@ BOOL CMainFrame::OnCopyData(CWnd* pWnd, COPYDATASTRUCT* pCopyDataStruct)
 			pDoc->m_Cursor.x = pDoc->m_CurPos.x;
 			pDoc->m_Cursor.y = pDoc->m_CurPos.y;
 			pDoc->m_CurTrust = data.trust;
-
+			
+			
 			UpdateINSInfo();
 			
 			Invalidate(FALSE);
